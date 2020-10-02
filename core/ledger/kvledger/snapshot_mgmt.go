@@ -116,7 +116,8 @@ func (l *kvLedger) processSnapshotMgmtEvents(lastCommittedBlockNumber uint64) {
 
 	for {
 		e := <-events
-		logger.Debugw("event received", "channelID", l.ledgerID, "type", e.typ, "blockNumber", e.blockNumber, "snapshotInProgress=", snapshotInProgress)
+		logger.Infow("event received", "channelID", l.ledgerID, "type", e.typ, "blockNumber", e.blockNumber, "snapshotInProgress=", snapshotInProgress,
+			"smallestRequestBlockNum", l.snapshotMgr.snapshotRequestBookkeeper.smallestRequestBlockNum)
 		switch e.typ {
 		case commitStart:
 			committerStatus = blocked
@@ -150,6 +151,7 @@ func (l *kvLedger) processSnapshotMgmtEvents(lastCommittedBlockNumber uint64) {
 			if err := l.snapshotMgr.snapshotRequestBookkeeper.delete(e.blockNumber); err != nil {
 				logger.Errorw("Failed to delete snapshot request, the pending snapshot requests (if any) may not be processed", "channelID", l.ledgerID, "requestedBlockNum", requestedBlockNum, "error", err)
 			}
+			logger.Infow("snapshot generation is done, after deleting the request", "requestedBlockNum", e.blockNumber, "smallestRequestBlockNum", l.snapshotMgr.snapshotRequestBookkeeper.smallestRequestBlockNum)
 			if committerStatus == blocked {
 				// write to commitProceed channel to unblock commit
 				committerStatus = inProcess
@@ -190,6 +192,8 @@ func (l *kvLedger) processSnapshotMgmtEvents(lastCommittedBlockNumber uint64) {
 				requestResponses <- &requestResponse{err}
 				continue
 			}
+
+			logger.Infow("submitting a snapshot request", "requestedBlockNum", requestedBlockNum, "smallestRequestBlockNum", l.snapshotMgr.snapshotRequestBookkeeper.smallestRequestBlockNum)
 
 			if committerStatus == idle && requestedBlockNum == lastCommittedBlockNumber {
 				snapshotInProgress = true
